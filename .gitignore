@@ -5,10 +5,8 @@ __pycache__/
 *.pyd
 *.py[cod]
 
-# Virtual environment
+#Virtual environment
 venv/
-env/
-.env/
 
 # Django files
 *.log
@@ -17,3 +15,6 @@ media/
 
 # VS Code settings
 .vscode/
+
+# Environment variables
+.env
