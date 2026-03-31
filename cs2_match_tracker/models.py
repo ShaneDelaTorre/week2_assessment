@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 # Create your models here.
 class User(AbstractUser):
@@ -28,29 +29,30 @@ class Match(models.Model):
         LOSS = 'Loss'
         DRAW = 'Draw'
 
-    map = models.ForeignKey(Map, on_delete=models.CASCADE, related_name='map_matches')
+    map_played = models.ForeignKey(Map, on_delete=models.CASCADE, related_name='map_played')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='matches')
     date_played = models.DateTimeField(auto_now_add=True)
     result = models.CharField(max_length=10, choices=RESULT_CHOICES.choices)
-    team_score = models.IntegerField()
-    opponent_score = models.IntegerField()
+    team_score = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(13)])
+    opponent_score = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(13)])
 
     def __str__(self):
-        return f"{self.created_by.username} - {self.map.name} on {self.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"{self.created_by.username} - {self.map_played.name} on {self.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 class UserMatchStat(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='match_stats')
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='user_stats')
-    kills = models.IntegerField(default=0)
-    deaths = models.IntegerField(default=0)
-    assists = models.IntegerField(default=0)
-    headshots = models.IntegerField(default=0)
-    mvp_rounds = models.IntegerField(default=0)
-    damage_dealt = models.IntegerField(default=0)
-
+    kills = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    deaths = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    assists = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    mvp_rounds = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    score = models.IntegerField(default=0, validators=[MinValueValidator(0)])
     class Meta:
         unique_together = ('user', 'match')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.match.map_played.name} on {self.match.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
     
 class Weapon(models.Model):
     class WeaponType(models.TextChoices):
@@ -71,7 +73,7 @@ class Weapon(models.Model):
 class WeaponStat(models.Model):
     stat = models.ForeignKey(UserMatchStat, on_delete=models.CASCADE, related_name='weapon_stats')
     weapon = models.ForeignKey(Weapon, on_delete=models.CASCADE, related_name='weapon_stats')
-    kills = models.IntegerField(default=0)
+    kills = models.IntegerField(default=0, validators=[MinValueValidator(0)])
 
     class Meta:
         unique_together = ('stat', 'weapon')
