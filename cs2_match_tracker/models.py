@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
+from django.db.models import Sum
 
 # Create your models here.
 class User(AbstractUser):
@@ -121,3 +123,9 @@ class WeaponStat(models.Model):
 
     def __str__(self):
         return f"{self.stat.user.username} - {self.weapon.name} in {self.stat.match.map_played.name} ({self.stat.match.team_score} - {self.stat.match.opponent_score}): {self.kills} kills"
+    
+    def save(self, *args, **kwargs):
+        existing_sum = self.stat.weapon_stats.exclude(pk=self.pk).aggregate(total=Sum('kills'))['total'] or 0
+        if existing_sum + self.kills > self.stat.kills:
+            raise ValidationError("Total weapon kills cannot exceed the total kills in the match.")
+        super().save(*args, **kwargs)
