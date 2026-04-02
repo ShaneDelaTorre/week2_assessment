@@ -72,9 +72,50 @@ class WeaponSerializer(serializers.ModelSerializer):
         model = Weapon
         fields = ('name','weapon_type')
 
-class UserStatsSummarySerializer(serializers.Serializer):
-    total_matches = serializers.IntegerField()
-    win_rate = serializers.FloatField()
-    kill_death_ratio = serializers.CharField()
-    win_rate_by_map = serializers.DictField(child=serializers.FloatField())
-    favorite_weapon = serializers.CharField()
+class UserStatsSummarySerializer(serializers.ModelSerializer):
+    total_matches = serializers.SerializerMethodField()
+    win_rate = serializers.SerializerMethodField()
+    kill_death_ratio = serializers.SerializerMethodField()
+    win_rate_by_map = serializers.SerializerMethodField()
+    favorite_weapon = serializers.SerializerMethodField()
+
+    def get_total_matches(self, obj):
+        return obj.matches.count()
+    
+    def get_win_rate(self, obj):
+        total = obj.matches.count()
+        if total == 0:
+            return 0
+        wins = obj.matches.filter(result=Match.RESULT_CHOICES.WIN).count()
+        return (wins / total) * 100
+    
+    def get_kill_death_ratio(self, obj):
+        stats = UserMatchStat.objects.filter(user=obj)
+        total_kills = sum(stat.kills for stat in stats)
+        total_deaths = sum(stat.deaths for stat in stats)
+        if total_deaths == 0:
+            return f"{total_kills}/KDR"
+        return f"{total_kills / total_deaths:.2f}/KDR"
+    
+    def get_win_rate_by_map(self, obj):
+        maps = Map.objects.all()
+        win_rates = {}
+        for match_map in maps:
+            matches_on_map = obj.matches.filter(map_played=match_map)
+            total = matches_on_map.count()
+            if total == 0:
+                win_rates[match_map.name] = 0
+            else:
+                wins = matches_on_map.filter(result=Match.RESULT_CHOICES.WIN).count()
+                win_rates[match_map.name] = (wins / total) * 100
+        return win_rates
+    
+    def get_favorite_weapon(self, obj):
+        weapon_stats = WeaponStat.objects.filter(stat__user=obj)
+        if not weapon_stats.exists():
+            return None
+        favorite = weapon_stats.order_by('-kills').first()
+        return favorite.weapon.name
+    class Meta:
+        model = User
+        fields = ('id', 'total_matches', 'win_rate', 'kill_death_ratio', 'win_rate_by_map', 'favorite_weapon')
