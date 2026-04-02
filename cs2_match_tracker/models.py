@@ -21,44 +21,6 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
-    @property
-    def total_matches(self):
-        return self.matches.count()
-    @property
-    def win_rate(self):
-        total = self.total_matches
-        if total == 0:
-            return 0
-        wins = self.matches.filter(result=Match.RESULT_CHOICES.WIN).count()
-        return (wins / total) * 100
-    @property
-    def win_rate_by_map(self):
-        maps = Map.objects.all()
-        win_rates = {}
-        for match_map in maps:
-            matches_on_map = self.matches.filter(map_played=match_map)
-            total = matches_on_map.count()
-            if total == 0:
-                win_rates[match_map.name] = 0
-            else:
-                wins = matches_on_map.filter(result=Match.RESULT_CHOICES.WIN).count()
-                win_rates[match_map.name] = (wins / total) * 100
-        return win_rates
-    @property
-    def favorite_weapon(self):
-        weapon_stats = WeaponStat.objects.filter(stat__user=self)
-        if not weapon_stats.exists():
-            return None
-        favorite = weapon_stats.order_by('-kills').first()
-        return favorite.weapon.name
-    @property
-    def kill_death_ratio(self):
-        stats = UserMatchStat.objects.filter(user=self)
-        total_kills = sum(stat.kills for stat in stats)
-        total_deaths = sum(stat.deaths for stat in stats)
-        if total_deaths == 0:
-            return total_kills
-        return f"{total_kills / total_deaths:.2f}/KDR"
     
 class Map(models.Model):
     name = models.CharField(max_length=64)
