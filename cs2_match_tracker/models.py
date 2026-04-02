@@ -16,6 +16,47 @@ class User(AbstractUser):
         GOLD = '30000+'
 
     rank = models.CharField(max_length=30, choices=RANK_CHOICES.choices, default=RANK_CHOICES.UNRANKED)
+
+    def __str__(self):
+        return self.username
+    @property
+    def total_matches(self):
+        return self.matches.count()
+    @property
+    def win_rate(self):
+        total = self.total_matches
+        if total == 0:
+            return 0
+        wins = self.matches.filter(result=Match.RESULT_CHOICES.WIN).count()
+        return (wins / total) * 100
+    @property
+    def win_rate_by_map(self):
+        maps = Map.objects.all()
+        win_rates = {}
+        for match_map in maps:
+            matches_on_map = self.matches.filter(map_played=match_map)
+            total = matches_on_map.count()
+            if total == 0:
+                win_rates[match_map.name] = 0
+            else:
+                wins = matches_on_map.filter(result=Match.RESULT_CHOICES.WIN).count()
+                win_rates[match_map.name] = (wins / total) * 100
+        return win_rates
+    @property
+    def favorite_weapon(self):
+        weapon_stats = WeaponStat.objects.filter(stat__user=self)
+        if not weapon_stats.exists():
+            return None
+        favorite = weapon_stats.order_by('-kills').first()
+        return favorite.weapon.name
+    @property
+    def kill_death_ratio(self):
+        stats = UserMatchStat.objects.filter(user=self)
+        total_kills = sum(stat.kills for stat in stats)
+        total_deaths = sum(stat.deaths for stat in stats)
+        if total_deaths == 0:
+            return total_kills
+        return f"{total_kills / total_deaths:.2f}/KDR"
     
 class Map(models.Model):
     name = models.CharField(max_length=64)
@@ -37,7 +78,7 @@ class Match(models.Model):
     opponent_score = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(13)])
 
     def __str__(self):
-        return f"{self.created_by.username} - {self.map_played.name} on {self.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"{self.created_by.username} - {self.map_played.name} - ({self.team_score} - {self.opponent_score}) on {self.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 class UserMatchStat(models.Model):
@@ -52,7 +93,7 @@ class UserMatchStat(models.Model):
         unique_together = ('user', 'match')
 
     def __str__(self):
-        return f"{self.user.username} - {self.match.map_played.name} on {self.match.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"{self.user.username} - {self.match.map_played.name} - ({self.match.team_score} - {self.match.opponent_score}) on {self.match.date_played.strftime('%Y-%m-%d %H:%M:%S')}"
     
 class Weapon(models.Model):
     class WeaponType(models.TextChoices):
@@ -79,4 +120,4 @@ class WeaponStat(models.Model):
         unique_together = ('stat', 'weapon')
 
     def __str__(self):
-        return f"{self.stat.user.username} - {self.weapon.name}: {self.kills} kills"
+        return f"{self.stat.user.username} - {self.weapon.name} in {self.stat.match.map_played.name} ({self.stat.match.team_score} - {self.stat.match.opponent_score}): {self.kills} kills"
