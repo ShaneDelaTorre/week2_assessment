@@ -2,7 +2,6 @@ from rest_framework import serializers
 from .models import Match, User, UserMatchStat, WeaponStat, Map, Weapon
 from django.db.models import Sum
 
-
 class WeaponStatInputSerializer(serializers.ModelSerializer):
     weapon_name = serializers.CharField(source='weapon.name', read_only=True)
     class Meta:
@@ -65,7 +64,7 @@ class UserSerializer(serializers.ModelSerializer):
 class MapSerializer(serializers.ModelSerializer):
     class Meta:
         model = Map
-        fields = ('name')
+        fields = ('name',)
 
 class WeaponSerializer(serializers.ModelSerializer):
     class Meta:
@@ -83,14 +82,15 @@ class UserStatsSummarySerializer(serializers.ModelSerializer):
         return obj.matches.count()
     
     def get_win_rate(self, obj):
-        total = obj.matches.count()
+        matches = obj.matches.all()
+        total = matches.count()
         if total == 0:
             return 0
-        wins = obj.matches.filter(result=Match.RESULT_CHOICES.WIN).count()
+        wins = sum(1 for m in matches if m.result == Match.RESULT_CHOICES.WIN)
         return (wins / total) * 100
     
     def get_kill_death_ratio(self, obj):
-        stats = UserMatchStat.objects.filter(user=obj)
+        stats = obj.match_stats.all()
         total_kills = sum(stat.kills for stat in stats)
         total_deaths = sum(stat.deaths for stat in stats)
         if total_deaths == 0:
@@ -98,24 +98,26 @@ class UserStatsSummarySerializer(serializers.ModelSerializer):
         return f"{total_kills / total_deaths:.2f}/KDR"
     
     def get_win_rate_by_map(self, obj):
-        maps = Map.objects.all()
+        matches = obj.matches.all()
         win_rates = {}
-        for match_map in maps:
-            matches_on_map = obj.matches.filter(map_played=match_map)
-            total = matches_on_map.count()
-            if total == 0:
-                win_rates[match_map.name] = 0
-            else:
-                wins = matches_on_map.filter(result=Match.RESULT_CHOICES.WIN).count()
-                win_rates[match_map.name] = (wins / total) * 100
-        return win_rates
+        for match in matches:
+            map_name = match.map_played.name
+            if map_name not in win_rates:
+                win_rates[map_name] = {'total': 0, 'wins': 0}
+            win_rates[map_name]['total'] += 1
+            if match.result == Match.RESULT_CHOICES.WIN:
+                win_rates[map_name]['wins'] += 1
+        return {k: (v['wins'] / v['total']) * 100 if v['total'] > 0 else 0 for k, v in win_rates.items()}
     
     def get_favorite_weapon(self, obj):
-        weapon_stats = WeaponStat.objects.filter(stat__user=obj)
-        if not weapon_stats.exists():
+        weapon_kills = {}
+        for stat in obj.match_stats.all():
+            for ws in stat.weapon_stats.all():
+                weapon_name = ws.weapon.name
+                weapon_kills[weapon_name] = weapon_kills.get(weapon_name, 0) + ws.kills
+        if not weapon_kills:
             return None
-        favorite = weapon_stats.order_by('-kills').first()
-        return favorite.weapon.name
+        return max(weapon_kills, key=weapon_kills.get)
     class Meta:
         model = User
-        fields = ('id', 'total_matches', 'win_rate', 'kill_death_ratio', 'win_rate_by_map', 'favorite_weapon')
+        fields = ('id', 'total_matches', 'kill_death_ratio', 'win_rate', 'win_rate_by_map', 'favorite_weapon')
