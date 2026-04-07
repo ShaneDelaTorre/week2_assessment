@@ -1,60 +1,69 @@
 from rest_framework import serializers
 from .models import Match, User, UserMatchStat, WeaponStat, Map, Weapon
 from django.db.models import Sum
-
-class WeaponStatInputSerializer(serializers.ModelSerializer):
-    weapon_name = serializers.CharField(source='weapon.name', read_only=True)
+from django.contrib.auth.password_validation import validate_password
+from rest_framework.validators import UniqueValidator
+class WeaponStatCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WeaponStat
-        fields = ('stat', 'weapon_name', 'kills')
+        fields = ('stat', 'weapon', 'kills')
         
     def validate_kills(self, value):
         if value < 0:
             raise serializers.ValidationError("Kills cannot be negative.")
         return value
-    
-    def validate_kill_total(self, data):
-        stat = data['stat']
-        kills = data['kills']
-        existing_sum = stat.weapon_stats.exclude(pk=self.instance.pk).aggregate(total=Sum('kills'))['total'] or 0
-        if existing_sum + kills > stat.kills:
-            raise serializers.ValidationError("Total weapon kills cannot exceed the total kills in the match.")
+
+    def validate(self, data):
+        stat = data.get('stat')
+        kills = data.get('kills', 0)
+        if stat:
+            # Check total weapon kills against match kills
+            existing_sum = stat.weapon_stats.exclude(pk=getattr(self.instance, 'pk', None)).aggregate(total=Sum('kills'))['total'] or 0
+            if existing_sum + kills > stat.kills:
+                raise serializers.ValidationError("Total weapon kills cannot exceed the total kills in the match.")
         return data
 
 class WeaponStatViewSerializer(serializers.ModelSerializer):
     weapon_name = serializers.CharField(source='weapon.name', read_only=True)
     class Meta:
         model = WeaponStat
-        fields = ('weapon_name', 'kills')
+        fields = ('id', 'weapon', 'weapon_name', 'kills')
 
-class UserMatchStatInputSerializer(serializers.ModelSerializer):
+class UserMatchStatCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserMatchStat
         fields = ('match', 'kills', 'deaths', 'assists', 'mvp_rounds', 'score')
     
-    def validate_stats(self, data):
-        if data['kills'] < 0 or data['deaths'] < 0 or data['assists'] < 0 or data['headshots'] < 0 or data['mvp_rounds'] < 0 or data['damage_dealt'] < 0:
+    def validate(self, data):
+        if (data['kills'] < 0 or data['deaths'] < 0 or 
+            data['assists'] < 0 or data['mvp_rounds'] < 0 or data['score'] < 0):
             raise serializers.ValidationError("Stats cannot be negative.")
         return data
+
+class UserMatchStatDetailSerializer(serializers.ModelSerializer):
+    weapon_stats = WeaponStatViewSerializer(many=True, read_only=True)
+    class Meta:
+        model = UserMatchStat
+        fields = ('id', 'match', 'kills', 'deaths', 'assists', 'mvp_rounds', 'score', 'weapon_stats')
 
 class UserMatchStatViewSerializer(serializers.ModelSerializer):
     weapon_stats = WeaponStatViewSerializer(many=True, read_only=True)
     class Meta:
         model = UserMatchStat
-        fields = ('match', 'kills', 'deaths', 'assists', 'mvp_rounds', 'score', 'weapon_stats')
+        fields = ('id', 'match', 'kills', 'deaths', 'assists', 'mvp_rounds', 'score', 'weapon_stats')
 
 class MatchSerializer(serializers.ModelSerializer):
     map_name = serializers.CharField(source='map_played.name', read_only=True)
     class Meta:
         model = Match
-        fields = ('id', 'map_name', 'date_played', 'result', 'team_score', 'opponent_score')
+        fields = ('id', 'map_played', 'map_name', 'date_played', 'result', 'team_score', 'opponent_score')
 
 class MatchSerializerDetail(serializers.ModelSerializer):
     user_stats = UserMatchStatViewSerializer(many=True, read_only=True)
     map_name = serializers.CharField(source='map_played.name', read_only=True)
     class Meta:
         model = Match
-        fields = ('id', 'map_name', 'date_played', 'result', 'team_score', 'opponent_score', 'user_stats')
+        fields = ('id', 'map_played', 'map_name', 'date_played', 'result', 'team_score', 'opponent_score', 'user_stats')
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -121,3 +130,29 @@ class UserStatsSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'total_matches', 'kill_death_ratio', 'win_rate', 'win_rate_by_map', 'favorite_weapon')
+
+class UserRegisterSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=True, validators=[UniqueValidator(queryset=User.objects.all(), message="Username already exists.")])
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password_confirm = serializers.CharField(write_only=True)
+    class Meta:
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email', 'rank', 'password', 'password_confirm')
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({"password_confirm": "Password confirmation does not match."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            email=validated_data['email'],
+            rank=validated_data['rank'],
+            password=validated_data['password']
+        )
+        return user
