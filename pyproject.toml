@@ -1,0 +1,35 @@
+[project]
+name = "cs2-match-tracker"
+version = "1.0.0"
+description = "CS2 Match Tracker REST API"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "asgiref==3.11.1",
+    "django==6.0.3",
+    "django-filter==25.2",
+    "django-silk==5.5.0",
+    "djangorestframework==3.17.1",
+    "djangorestframework-simplejwt==5.5.1",
+    "gprof2dot==2025.4.14",
+    "psycopg2-binary==2.9.11",
+    "pyjwt==2.12.1",
+    "python-dotenv==1.2.2",
+    "sqlparse==0.5.5",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.9",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["cs2_match_tracker"]
