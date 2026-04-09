@@ -18,3 +18,9 @@ media/
 
 # Environment variables
 .env
+
+# Ruff cache
+.ruff_cache/
+
+# MacOS files
+.DS_Store
