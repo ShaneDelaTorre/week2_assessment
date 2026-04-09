@@ -1,18 +1,18 @@
 from django.db.models import Prefetch
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .filters import MatchFilter
 from .models import Map, Match, User, UserMatchStat, Weapon, WeaponStat
-from .permissions import IsAuthenticatedAndOwner, IsAuthenticatedOrReadOnly
+from .permissions import IsMatchOwnerOrAdmin, IsOwnerOrAdmin
 from .serializers import (
     MapSerializer,
     MatchSerializer,
     MatchSerializerDetail,
     UserMatchStatCreateSerializer,
-    UserMatchStatDetailSerializer,
+    UserMatchStatListRetrieveSerializer,
     UserRegisterSerializer,
     UserSerializer,
     UserStatsSummarySerializer,
@@ -34,13 +34,17 @@ class UserViewSet(
     viewsets.GenericViewSet,
 ):
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticatedAndOwner]
 
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
             return User.objects.all()
         return User.objects.filter(id=user.id)
+    
+    def get_permissions(self):
+        if self.action == "list":
+            return [IsAdminUser()]
+        return [IsOwnerOrAdmin()]
 
     @action(detail=False, methods=["get", "put", "patch", "delete"], url_path="me")
     def me(self, request):
@@ -74,8 +78,8 @@ class UserStatsSummaryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class UserMatchViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
     filterset_class = MatchFilter
+    permission_classes = [IsMatchOwnerOrAdmin]
 
     def get_queryset(self):
         user = self.request.user
@@ -100,15 +104,19 @@ class UserMatchStatViewSet(viewsets.ModelViewSet):
     queryset = UserMatchStat.objects.select_related("user", "match").prefetch_related(
         "weapon_stats__weapon"
     )
-    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         if self.action == "retrieve":
-            return UserMatchStatDetailSerializer
+            return UserMatchStatListRetrieveSerializer
         return UserMatchStatCreateSerializer
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAdminUser()]
+        return [IsOwnerOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
@@ -119,12 +127,16 @@ class UserMatchStatViewSet(viewsets.ModelViewSet):
 
 class WeaponStatViewSet(viewsets.ModelViewSet):
     queryset = WeaponStat.objects.select_related("stat__user", "stat__match", "weapon")
-    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
             return WeaponStatCreateSerializer
         return WeaponStatViewSerializer
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAdminUser()]
+        return [IsOwnerOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
@@ -133,13 +145,20 @@ class WeaponStatViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(stat__user=user)
 
 
-class MapViewSet(viewsets.ReadOnlyModelViewSet):
+class MapViewSet(viewsets.ModelViewSet):
     queryset = Map.objects.all()
     serializer_class = MapSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAuthenticated()]
+        return [IsAdminUser()]
 
-class WeaponViewSet(viewsets.ReadOnlyModelViewSet):
+class WeaponViewSet(viewsets.ModelViewSet):
     queryset = Weapon.objects.all()
     serializer_class = WeaponSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAuthenticated()]
+        return [IsAdminUser()]
