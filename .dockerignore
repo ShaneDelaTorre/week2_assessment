@@ -1,0 +1,27 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.ruff_cache
+
+# Virtual environments
+.venv
+venv
+
+# Environment & secrets
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+
+# uv/project tooling
+uv.lock
+.python-version
+pyproject.toml
+justfile
+
+# Django
+*.sqlite3
