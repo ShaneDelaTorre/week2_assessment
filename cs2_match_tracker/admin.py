@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import User, Map, Match, UserMatchStat, Weapon, WeaponStat
+
+from .models import Map, Match, User, UserMatchStat, Weapon, WeaponStat
+
 # Register your models here.
 admin.site.register(User)
 admin.site.register(Map)
