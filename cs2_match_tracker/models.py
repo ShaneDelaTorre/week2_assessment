@@ -27,7 +27,7 @@ class User(AbstractUser):
 
 
 class Map(models.Model):
-    name = models.CharField(max_length=64)
+    name = models.CharField(max_length=64, unique=True)
 
     def __str__(self):
         return self.name
@@ -88,7 +88,7 @@ class Weapon(models.Model):
         PISTOL = "Pistol"
         MACHINE_GUN = "Machine Gun"
 
-    name = models.CharField(max_length=64)
+    name = models.CharField(max_length=64, unique=True)
     weapon_type = models.CharField(max_length=20, choices=WeaponType.choices)
 
     def __str__(self):
