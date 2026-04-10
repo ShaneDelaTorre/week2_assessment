@@ -3,7 +3,7 @@ services:
     image: postgres:16
     restart: always
     env_file:
-      - .env
+      - .env.docker
     ports:
       - "5433:5432"
     volumes:
@@ -13,7 +13,7 @@ services:
     build: .
     restart: always
     env_file:
-      - .env
+      - .env.docker
     ports:
       - "8000:8000"
     depends_on:
