@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 
 from .models import Map, Match, UserMatchStat, Weapon, WeaponStat
-from .permissions import IsAuthenticatedAndOwner, IsAuthenticatedOrReadOnly
+from .permissions import IsMatchOwnerOrAdmin, IsOwnerOrAdmin
 from .serializers import (
     MapSerializer,
     MatchSerializer,
@@ -431,12 +431,10 @@ class WeaponStatModelTests(TestCase):
             weapon_stat.save()
 
     def test_weapon_stat_multiple_weapons(self):
-        ak_stat = WeaponStat.objects.create(
-            stat=self.stat, weapon=self.weapon, kills=10
-        )
+        WeaponStat.objects.create(stat=self.stat, weapon=self.weapon, kills=10)
 
         m4 = Weapon.objects.create(name="M4A1", weapon_type=Weapon.WeaponType.RIFLE)
-        m4_stat = WeaponStat.objects.create(stat=self.stat, weapon=m4, kills=10)
+        WeaponStat.objects.create(stat=self.stat, weapon=m4, kills=10)
 
         self.assertEqual(self.stat.weapon_stats.count(), 2)
 
@@ -508,7 +506,7 @@ class MatchSerializerTests(TestCase):
         self.assertEqual(serializer.data["team_score"], 13)
 
     def test_match_serializer_detail(self):
-        stat = UserMatchStat.objects.create(user=self.user, match=self.match, kills=20)
+        UserMatchStat.objects.create(user=self.user, match=self.match, kills=20)
         serializer = MatchSerializerDetail(self.match)
         self.assertEqual(serializer.data["map_name"], "Inferno")
         self.assertIn("user_stats", serializer.data)
@@ -594,72 +592,98 @@ class WeaponStatSerializerTests(TestCase):
 
 
 # ==================== PERMISSION TESTS ====================
-class IsAuthenticatedAndOwnerTests(TestCase):
+class IsOwnerOrAdminTests(TestCase):
     def setUp(self):
-        self.permission = IsAuthenticatedAndOwner()
+        self.permission = IsOwnerOrAdmin()
         self.factory = APIRequestFactory()
         self.user = User.objects.create_user(username="permuser", password="pass123")
+        self.other_user = User.objects.create_user(
+            username="otheruser", password="pass123"
+        )
         self.staff_user = User.objects.create_user(
             username="permstaff", password="pass123", is_staff=True
         )
 
-    def test_authenticated_owner_has_permission(self):
+    def test_authenticated_user_has_permission(self):
         request = self.factory.get("/")
         request.user = self.user
-
-        view = type("View", (), {"action": "retrieve"})()
-
-        self.assertTrue(self.permission.has_permission(request, view))
-        self.assertTrue(self.permission.has_object_permission(request, view, self.user))
-
-    def test_staff_has_permission(self):
-        request = self.factory.get("/")
-        request.user = self.staff_user
-
-        view = type("View", (), {"action": "list"})()
+        view = type("View", (), {})()
         self.assertTrue(self.permission.has_permission(request, view))
 
     def test_unauthenticated_no_permission(self):
         request = self.factory.get("/")
         request.user = type("User", (), {"is_authenticated": False})()
-
-        view = type("View", (), {"action": "retrieve"})()
+        view = type("View", (), {})()
         self.assertFalse(self.permission.has_permission(request, view))
 
+    def test_owner_has_object_permission(self):
+        request = self.factory.get("/")
+        request.user = self.user
+        view = type("View", (), {})()
+        obj = type("Obj", (), {"user": self.user})()
+        self.assertTrue(self.permission.has_object_permission(request, view, obj))
 
-class IsAuthenticatedOrReadOnlyTests(TestCase):
+    def test_non_owner_no_object_permission(self):
+        request = self.factory.get("/")
+        request.user = self.other_user
+        view = type("View", (), {})()
+        obj = type("Obj", (), {"user": self.user})()
+        self.assertFalse(self.permission.has_object_permission(request, view, obj))
+
+    def test_staff_has_object_permission(self):
+        request = self.factory.get("/")
+        request.user = self.staff_user
+        view = type("View", (), {})()
+        obj = type("Obj", (), {"user": self.user})()
+        self.assertTrue(self.permission.has_object_permission(request, view, obj))
+
+
+class IsMatchOwnerOrAdminTests(TestCase):
     def setUp(self):
-        self.permission = IsAuthenticatedOrReadOnly()
+        self.permission = IsMatchOwnerOrAdmin()
         self.factory = APIRequestFactory()
-        self.user = User.objects.create_user(username="readuser", password="pass123")
+        self.user = User.objects.create_user(
+            username="matchpermuser", password="pass123"
+        )
+        self.other_user = User.objects.create_user(
+            username="matchother", password="pass123"
+        )
+        self.staff_user = User.objects.create_user(
+            username="matchpermstaff", password="pass123", is_staff=True
+        )
 
-    def test_get_request_allowed_anonymous(self):
+    def test_authenticated_user_has_permission(self):
+        request = self.factory.get("/")
+        request.user = self.user
+        view = type("View", (), {})()
+        self.assertTrue(self.permission.has_permission(request, view))
+
+    def test_unauthenticated_no_permission(self):
         request = self.factory.get("/")
         request.user = type("User", (), {"is_authenticated": False})()
-
         view = type("View", (), {})()
-        self.assertTrue(self.permission.has_permission(request, view))
+        self.assertFalse(self.permission.has_permission(request, view))
 
-    def test_post_request_authenticated(self):
-        request = self.factory.post("/")
+    def test_match_owner_has_object_permission(self):
+        request = self.factory.get("/")
         request.user = self.user
-
         view = type("View", (), {})()
-        self.assertTrue(self.permission.has_permission(request, view))
+        obj = type("Obj", (), {"created_by": self.user})()
+        self.assertTrue(self.permission.has_object_permission(request, view, obj))
 
-    def test_post_request_anonymous_denied(self):
-        request = self.factory.post("/")
-        request.user = type("User", (), {"is_authenticated": False})()
-
+    def test_non_owner_no_object_permission(self):
+        request = self.factory.get("/")
+        request.user = self.other_user
         view = type("View", (), {})()
-        self.assertFalse(self.permission.has_permission(request, view))
+        obj = type("Obj", (), {"created_by": self.user})()
+        self.assertFalse(self.permission.has_object_permission(request, view, obj))
 
-    def test_put_request_anonymous_denied(self):
-        request = self.factory.put("/")
-        request.user = type("User", (), {"is_authenticated": False})()
-
+    def test_staff_has_object_permission(self):
+        request = self.factory.get("/")
+        request.user = self.staff_user
         view = type("View", (), {})()
-        self.assertFalse(self.permission.has_permission(request, view))
+        obj = type("Obj", (), {"created_by": self.user})()
+        self.assertTrue(self.permission.has_object_permission(request, view, obj))
 
 
 # ==================== API ENDPOINT TESTS ====================
@@ -811,13 +835,13 @@ class WeaponStatViewSetTests(BaseTestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_list_weapon_stats(self):
+    def test_list_weapon_stats_admin_only(self):
         WeaponStat.objects.create(stat=self.stat, weapon=self.weapon, kills=10)
         url = reverse("weapon-stat-list")
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_user_only_sees_own_weapon_stats(self):
+    def test_user_only_sees_own_weapon_stats_admin(self):
         WeaponStat.objects.create(stat=self.stat, weapon=self.weapon, kills=10)
 
         # Create another user's stat
@@ -828,7 +852,8 @@ class WeaponStatViewSetTests(BaseTestCase):
 
         url = reverse("weapon-stat-list")
         response = self.client.get(url)
-        self.assertEqual(len(response.data["results"]), 1)
+        print(response.data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class MapViewSetTests(APITestCase):
