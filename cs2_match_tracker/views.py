@@ -40,7 +40,7 @@ class UserViewSet(
         if user.is_staff:
             return User.objects.all()
         return User.objects.filter(id=user.id)
-    
+
     def get_permissions(self):
         if self.action == "list":
             return [IsAdminUser()]
@@ -83,8 +83,10 @@ class UserMatchViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Match.objects.select_related("map_played").prefetch_related(
-            "user_stats__weapon_stats__weapon"
+        queryset = (
+            Match.objects.select_related("map_played")
+            .prefetch_related("user_stats__weapon_stats__weapon")
+            .order_by("id")
         )
         if user.is_staff:
             return queryset
@@ -114,7 +116,7 @@ class UserMatchStatViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action == "list":
             return [IsAdminUser()]
         return [IsOwnerOrAdmin()]
 
@@ -134,7 +136,7 @@ class WeaponStatViewSet(viewsets.ModelViewSet):
         return WeaponStatViewSerializer
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action == "list":
             return [IsAdminUser()]
         return [IsOwnerOrAdmin()]
 
@@ -151,8 +153,9 @@ class MapViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
-            return [IsAuthenticated()]
+            return [AllowAny()]
         return [IsAdminUser()]
+
 
 class WeaponViewSet(viewsets.ModelViewSet):
     queryset = Weapon.objects.all()
@@ -160,5 +163,5 @@ class WeaponViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
-            return [IsAuthenticated()]
+            return [AllowAny()]
         return [IsAdminUser()]
