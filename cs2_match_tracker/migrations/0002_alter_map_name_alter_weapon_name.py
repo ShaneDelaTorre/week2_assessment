@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('cs2_match_tracker', '0001_initial'),
+        ("cs2_match_tracker", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='map',
-            name='name',
+            model_name="map",
+            name="name",
             field=models.CharField(max_length=64, unique=True),
         ),
         migrations.AlterField(
-            model_name='weapon',
-            name='name',
+            model_name="weapon",
+            name="name",
             field=models.CharField(max_length=64, unique=True),
         ),
     ]

@@ -7,6 +7,7 @@ from django.db.models import Sum
 
 
 # Create your models here.
+# ruff: noqa: E501
 class User(AbstractUser):
     class RANK_CHOICES(models.TextChoices):
         UNRANKED = "Unranked"

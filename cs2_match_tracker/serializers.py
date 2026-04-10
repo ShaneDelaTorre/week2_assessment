@@ -58,6 +58,7 @@ class UserMatchStatCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Stats cannot be negative.")
         return data
 
+
 class UserMatchStatListRetrieveSerializer(serializers.ModelSerializer):
     weapon_stats = WeaponStatViewSerializer(many=True, read_only=True)
 
@@ -181,8 +182,8 @@ class UserStatsSummarySerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id",
-            'username',
-            'rank',
+            "username",
+            "rank",
             "total_matches",
             "kill_death_ratio",
             "win_rate",
