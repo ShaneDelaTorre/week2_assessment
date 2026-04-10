@@ -43,3 +43,25 @@ check:
 # Sync all dependencies
 sync:
     uv sync
+
+# Docker compose directives
+dc-up:
+    docker compose up -d
+
+dc-up-b:
+    docker compose up --build -d
+
+dc-down:
+    docker compose down
+
+dc-logs:
+    docker compose logs -f
+
+dc-ps:
+    docker compose ps -a
+
+dc-exec-shell:
+    docker compose exec api python manage.py shell
+
+dc-exec-migrate:
+    docker compose exec api python manage.py migrate
